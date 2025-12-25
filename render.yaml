@@ -3,9 +3,14 @@ services:
     name: bidmaster-backend
     env: node
     region: oregon
-    plan: free
-    buildCommand: npm ci && npm run build
+    plan: starter  # Upgrade for production
+    buildCommand: |
+      npm ci
+      npm run build
+      npm run migrate
     startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
@@ -18,8 +23,10 @@ services:
           name: bidmaster-redis
           type: redis
           property: connectionString
-    healthCheckPath: /health
-    autoDeploy: true
+    disk:
+      name: uploads
+      mountPath: /opt/render/project/src/uploads
+      sizeGB: 10
     headers:
       - path: /*
         name: X-Frame-Options
@@ -30,15 +37,48 @@ services:
       - path: /*
         name: X-XSS-Protection
         value: 1; mode=block
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /uploads/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: /api/*
+      - type: rewrite
+        source: /webhooks/*
+        destination: /webhooks/*
+      - type: rewrite
+        source: /health
+        destination: /health
+      - type: rewrite
+        source: /api-docs
+        destination: /api-docs
 
 databases:
   - name: bidmaster-db
     databaseName: bidmaster
     user: bidmaster_user
-    plan: free
+    plan: starter  # Upgrade for production
     region: oregon
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+    postgresMajorVersion: 15
 
 redis:
   - name: bidmaster-redis
-    plan: free
+    plan: starter  # Upgrade for production
+    region: oregon
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: everywhere
+
+crons:
+  - name: cleanup-job
+    schedule: "0 2 * * *"  # Daily at 2 AM
+    command: node dist/scripts/cleanup.js
     region: oregon
