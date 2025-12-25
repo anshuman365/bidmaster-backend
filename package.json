@@ -2,16 +2,15 @@
   "scripts": {
     "start": "node dist/server.js",
     "dev": "nodemon src/server.ts",
-    "build": "tsc && npm run copy-files",
-    "copy-files": "mkdir -p dist/uploads && cp -r src/public dist/ 2>/dev/null || true",
+    "build": "tsc",
+    "copy-files": "cp -r src/public dist/ 2>/dev/null || true",
     "migrate": "npx ts-node src/scripts/migrate.ts",
     "seed": "npx ts-node src/scripts/seed.ts",
+    "test": "jest --coverage",
+    "lint": "eslint src/**/*.ts --fix",
+    "format": "prettier --write .",
     "render:deploy": "render deploy",
     "render:logs": "render logs",
-    "render:env": "render env"
-  },
-  "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
+    "postinstall": "npm run build"
   }
 }

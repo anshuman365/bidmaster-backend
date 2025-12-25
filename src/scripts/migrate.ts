@@ -1,50 +1,54 @@
 import { Sequelize } from 'sequelize';
-import { Umzug, SequelizeStorage } from 'umzug';
-import path from 'path';
 import { logger } from '../utils/logger';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const sequelize = new Sequelize(process.env.DATABASE_URL!, {
-  dialect: 'postgres',
-  logging: (msg) => logger.debug(msg),
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
-    }
-  }
-});
-
-const umzug = new Umzug({
-  migrations: {
-    glob: path.join(__dirname, '../database/migrations/*.ts'),
-  },
-  context: sequelize.getQueryInterface(),
-  storage: new SequelizeStorage({ sequelize }),
-  logger: console,
-});
-
 async function runMigrations() {
   try {
+    const sequelize = new Sequelize(process.env.DATABASE_URL!, {
+      dialect: 'postgres',
+      logging: (msg) => logger.debug(msg),
+      dialectOptions: {
+        ssl: {
+          require: true,
+          rejectUnauthorized: false
+        }
+      }
+    });
+
     await sequelize.authenticate();
-    logger.info('Database connected for migrations');
+    logger.info('✅ Database connected for migrations');
+
+    // Create tables using Sequelize sync (for initial deployment)
+    await sequelize.sync({ alter: true });
+    logger.info('✅ Database tables synced');
+
+    // Create admin user
+    const User = require('../database/models/User').default;
+    const adminCount = await User.count({ where: { role: 'admin' } });
     
-    const pending = await umzug.pending();
-    logger.info(`Pending migrations: ${pending.length}`);
-    
-    if (pending.length > 0) {
-      await umzug.up();
-      logger.info('All migrations completed successfully');
-    } else {
-      logger.info('No pending migrations');
+    if (adminCount === 0) {
+      const adminUser = await User.create({
+        email: 'admin@bidmaster.com',
+        password: 'Admin@123',
+        firstName: 'Admin',
+        lastName: 'User',
+        phone: '+1234567890',
+        role: 'admin',
+        isVerified: true,
+        isActive: true,
+        emailVerified: true,
+        phoneVerified: true
+      });
+      logger.info(`✅ Admin user created: ${adminUser.email}`);
     }
-    
+
     await sequelize.close();
+    logger.info('✅ Migration completed successfully');
     process.exit(0);
   } catch (error) {
-    logger.error('Migration failed:', error);
+    logger.error('❌ Migration failed:', error);
     process.exit(1);
   }
 }
